@@ -39,29 +39,29 @@ def build_weighted_graph(instance: ProblemInstance) -> nx.Graph:
     # Add all endpoints as nodes in the graph
     for vertex in instance.endpoints:
         G.add_node(vertex)
-
+    G.add_edges_from((edge.endpoint_a, edge.endpoint_b, {"weight": edge.distance}) for edge in instance.connections)
     # Add edges with weights to the graph
-    for v in instance.endpoints:
-        for w in instance.endpoints:
-            if v != w:  # Ensure not to check the same node
-                # Check if there is an edge between v and w
-                if any(
-                    edge.endpoint_a == v and edge.endpoint_b == w
-                    for edge in instance.connections
-                ) or any(
-                    edge.endpoint_a == w and edge.endpoint_b == v
-                    for edge in instance.connections
-                ):
-                    # Get the weight of the edge and add it to the graph
-                    weight = get_edge_weight(instance, v, w)
-                    G.add_edge(v, w, weight=weight)
+
+    # for v in instance.endpoints:
+    #     for w in instance.endpoints:
+    #         if v != w:  # Ensure not to check the same node
+    #             # Check if there is an edge between v and w
+    #             if any(
+    #                 edge.endpoint_a == v and edge.endpoint_b == w
+    #                 for edge in instance.connections
+    #             ) or any(
+    #                 edge.endpoint_a == w and edge.endpoint_b == v
+    #                 for edge in instance.connections
+    #             ):
+    #                 # Get the weight of the edge and add it to the graph
+    #                 weight = get_edge_weight(instance, v, w)
+    #                 G.add_edge(v, w, weight=weight)
 
     return G
 
 
-def distance(instance: ProblemInstance, u: str, v: str) -> int:
+def distance(graph, u: str, v: str) -> int:
     """Calculate the shortest path distance between two endpoints in the network."""
-    graph = build_weighted_graph(instance)
     return nx.shortest_path_length(graph, u, v, weight="weight")
 
 
@@ -81,6 +81,7 @@ class MaxPlacementsSolver:
             endpoint: self.model.new_bool_var(endpoint)
             for endpoint in instance.approved_endpoints
         }
+        self.graph = build_weighted_graph(self.instance)
 
         # Add constraints and objective to the model
         self._add_distance_constraints()
@@ -90,14 +91,11 @@ class MaxPlacementsSolver:
     def _add_distance_constraints(self):
         """Add constraints to ensure selected endpoints are not too close."""
         logging.info("Adding distance constraints")
-        for endpoint1, endpoint2 in itertools.combinations(
-            self.instance.approved_endpoints, 2
-        ):
-            if (
-                distance(self.instance, endpoint1, endpoint2)
-                < self.instance.min_distance_between_placements
-            ):
-                self.model.Add(self.vars[endpoint1] + self.vars[endpoint2] <= 1)
+        for endpoint1 in self.instance.approved_endpoints:
+            f = nx.single_source_dijkstra_path_length(self.graph, endpoint1, cutoff=self.instance.min_distance_between_placements)
+            for endpoint2, d in f.items():
+                if endpoint1 < endpoint2 and d < self.instance.min_distance_between_placements and endpoint2 in self.instance.approved_endpoints:
+                    self.model.Add(self.vars[endpoint1] + self.vars[endpoint2] <= 1)
 
     def _set_objective(self):
         """Set the objective to maximize the number of selected endpoints."""
