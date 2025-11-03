@@ -18,7 +18,7 @@ class MultiKnapsackSolver:
     - solver (CpSolver): a CpSolver object representing the constraint programming solver.
     """
 
-    def __init__(self, instance: Instance, activate_toxic: bool = False):
+    def __init__(self, instance: Instance, activate_toxic: bool = True):
         """
         Initialize the solver with the given Multi-Knapsack instance.
 
@@ -33,12 +33,21 @@ class MultiKnapsackSolver:
         self.solver.parameters.log_search_progress = True
         # TODO: Implement me!
         self.x = [[self.model.new_bool_var(f"x_{i}_{j}") for j in range(len(self.capacities))] for i in range(len(self.items))]
+        self.toxic = [self.model.new_bool_var(f"toxic_{i}") for i in range(len(self.capacities))]
+        # constraints
         # capacity
         for j in range(len(self.capacities)):
             self.model.add(sum(self.items[i].weight * self.x[i][j] for i in range(len(self.items))) <= self.capacities[j])
         # assignment
         for i in range(len(self.items)):
             self.model.add(sum(self.x[i][j] for j in range(len(self.capacities))) <= 1)
+        # toxic
+        for i in range(len(self.items)):
+                for j in range(len(self.capacities)):
+                    if self.items[i].toxic:
+                        self.model.add_implication(self.x[i][j], self.toxic[j])
+                    else:
+                        self.model.add_implication(self.x[i][j], ~self.toxic[j])
         # objective
         self.model.maximize(sum(self.x[i][j] * self.items[i].value for i in range(len(self.items)) for j in range(len(self.capacities))))
 
