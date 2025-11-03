@@ -32,7 +32,15 @@ class MultiKnapsackSolver:
         self.solver = CpSolver()
         self.solver.parameters.log_search_progress = True
         # TODO: Implement me!
-
+        self.x = [[self.model.new_bool_var(f"x_{i}_{j}") for j in range(len(self.capacities))] for i in range(len(self.items))]
+        # capacity
+        for j in range(len(self.capacities)):
+            self.model.add(sum(self.items[i].weight * self.x[i][j] for i in range(len(self.items))) <= self.capacities[j])
+        # assignment
+        for i in range(len(self.items)):
+            self.model.add(sum(self.x[i][j] for j in range(len(self.capacities))) <= 1)
+        # objective
+        self.model.maximize(sum(self.x[i][j] * self.items[i].value for i in range(len(self.items)) for j in range(len(self.capacities))))
 
 
     def solve(self, timelimit: float = math.inf) -> Solution:
@@ -51,4 +59,11 @@ class MultiKnapsackSolver:
         if timelimit < math.inf:
             self.solver.parameters.max_time_in_seconds = timelimit
         # TODO: Implement me!
-        return Solution(trucks=[])  # empty solution
+        self.solver.solve(self.model)
+        result = [[] for _ in range(len(self.capacities))]
+        for i in range(len(self.items)):
+            for j in range(len(self.capacities)):
+                if self.solver.Value(self.x[i][j]):
+                    result[j].append(self.items[i])
+
+        return Solution(trucks=result)
