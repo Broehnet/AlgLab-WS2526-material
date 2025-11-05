@@ -42,12 +42,13 @@ class MultiKnapsackSolver:
         for i in range(len(self.items)):
             self.model.add(sum(self.x[i][j] for j in range(len(self.capacities))) <= 1)
         # toxic
-        for i in range(len(self.items)):
-                for j in range(len(self.capacities)):
-                    if self.items[i].toxic:
-                        self.model.add_implication(self.x[i][j], self.toxic[j])
-                    else:
-                        self.model.add_implication(self.x[i][j], ~self.toxic[j])
+        if self.activate_toxic:
+            for i in range(len(self.items)):
+                    for j in range(len(self.capacities)):
+                        if self.items[i].toxic:
+                            self.model.add_implication(self.x[i][j], self.toxic[j])
+                        else:
+                            self.model.add_implication(self.x[i][j], ~self.toxic[j])
         # objective
         self.model.maximize(sum(self.x[i][j] * self.items[i].value for i in range(len(self.items)) for j in range(len(self.capacities))))
 

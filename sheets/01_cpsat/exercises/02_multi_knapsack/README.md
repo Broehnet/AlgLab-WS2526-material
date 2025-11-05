@@ -50,17 +50,17 @@ $i, i\in K$. Use the knapsack model as a reference.
 >
 > Maximize the total value of packed items:
 >
-> $$\max \sum_{i \in I} \sum_{j \in K} v_i \cdot \square$$
+> $$\max \sum_{i \in I} \sum_{j \in K} v_i \cdot x_{i,j}$$
 >
 > #### Constraints:
 >
 > 1. **Truck capacity constraint**: Do not exceed the capacity of any truck.
 >
-> - $\sum_{i \in I} w_i \cdot \square \leq \square \quad \forall j \in \square$
+> - $\sum_{i \in I} w_i \cdot x_{i,j} \leq C_j \quad \forall j \in K$
 >
 > 2. **Item assignment constraint**: Each item is packed in at most one truck.
 >
-> - $\sum_{j \in K} \square \leq \square \quad \forall i \in I$
+> - $\sum_{j \in K} x_{i,j} \leq 1 \quad \forall i \in I$
 >
 > </details>
 
