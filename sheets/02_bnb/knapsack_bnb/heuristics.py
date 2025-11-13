@@ -63,11 +63,29 @@ class MyHeuristic(Heuristics):
     def search(
         self, instance: Instance, relaxed: RelaxedSolution
     ) -> Tuple[HeuristicSolution, ...]:
-        if relaxed.does_obey_capacity_constraint() and relaxed.is_integral():
-            heuristic_sol = HeuristicSolution(
-                instance, relaxed.selection, relaxed.upper_bound
-            )
-            return (heuristic_sol,)
-        return ()
+        relaxed = relaxed.copy()
+        selection = relaxed.selection.copy()
+        items = relaxed.instance.items
+        for i, val in enumerate(selection):
+            if 0.0 < val < 1.0:
+                selection[i] = 0.0
+                break
 
+        not_used = [i for i, val in enumerate(selection) if val == 0.0]
+        not_used.sort(key=lambda i: items[i].weight/items[i].value)
+        used_weight = 0
+        upper = 0
+        for i, val in enumerate(selection):
+            if val == 1.0:
+                used_weight += items[i].weight
+                upper += items[i].value
+
+        remaining = instance.capacity - used_weight
+        for i in not_used:
+            if items[i].weight <= remaining:
+                selection[i] = 1.0
+                upper += items[i].value
+                remaining -= items[i].weight
+
+        return (HeuristicSolution(instance, selection, upper),)
 

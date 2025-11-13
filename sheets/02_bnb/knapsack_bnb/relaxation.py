@@ -104,10 +104,37 @@ class MyRelaxationSolver(RelaxationSolver):
     ) -> RelaxedSolution:
         # placeholder: behave like NaiveRelaxationSolver
         used = sum(item.weight for item, x in zip(instance.items, decisions) if x == 1)
+        value = sum(item.value for item, x in zip(instance.items, decisions) if x == 1)
         if used > instance.capacity:
             return RelaxedSolution.create_infeasible(instance)
-        selection = [0.0 if x == 0 else 1.0 for x in decisions]
-        upper = sum(item.value * sel for item, sel in zip(instance.items, selection))
+        not_fixed = []
+        remaining = instance.capacity - used
+        selection = [1.0 if x == 1.0 else 0.0 for x in decisions]
+        for i in range(len(decisions)):
+            if decisions[i] is None:
+                not_fixed.append(i)
+        not_fixed_prop = []
+        for i in not_fixed:
+            if instance.items[i].weight <= remaining:
+                not_fixed_prop.append(i)
+        available = [(instance.items[i], i) for i in not_fixed_prop]
+        available.sort(key=lambda item: item[0].weight/item[0].value)
+        upper = value
+        while True:
+            if len(available) == 0:
+                break
+            remaining = instance.capacity - used
+            current = available.pop(0)
+            if current[0].weight > remaining:
+                upper += remaining/current[0].weight * current[0].value
+                selection[current[1]] = remaining/current[0].weight
+                break
+            upper += current[0].value
+            used += current[0].weight
+            selection[current[1]] = 1.0
+
+
+
         return RelaxedSolution(instance, selection, upper)
 
 
