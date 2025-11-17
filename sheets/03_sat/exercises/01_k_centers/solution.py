@@ -4,6 +4,8 @@ import math
 from typing import Iterable
 
 import networkx as nx
+from networkx.classes import neighbors
+from pydantic.v1 import NoneIsAllowedError
 from pysat.solvers import Solver as SATSolver
 
 logging.basicConfig(level=logging.INFO)
@@ -50,18 +52,40 @@ class Distances:
 class KCenterDecisionVariant:
     def __init__(self, distances: Distances, k: int) -> None:
         self.distances = distances
+        self.node_to_var = {node: i+1 for i, node in enumerate(self.distances.all_vertices())}
+        self.var_to_node = {var: node for node, var in self.node_to_var.items()}
         # TODO: Implement me!
         # Solution model
         self._solution: list[NodeId] | None = None
+        self.k = k
+        self.solver = SATSolver("Minicard")
+        self.max_dist = math.inf
+        self.solver.add_atmost([self.node_to_var[node] for node in self.distances.all_vertices()], self.k)
+        self._unsat = False
 
     def limit_distance(self, limit: float) -> None:
         """Adds constraints to the SAT solver to ensure coverage within the given distance."""
         logging.info("Limiting to distance: %f", limit)
         # TODO: Implement me!
+        nodes = list(self.distances.all_vertices())
+        for u in nodes:
+            nodes_in_limit = self.distances.vertices_in_range(u, limit)
+            if not nodes_in_limit:
+                self._unsat = True
+                return
+            self.solver.add_clause([self.node_to_var[node] for node in nodes_in_limit])
+
 
     def solve(self) -> list[NodeId] | None:
         """Solves the SAT problem and returns the list of selected nodes, if feasible."""
-        # TODO: Implement me!
+        if self._unsat:
+            return None
+        if not self.solver.solve():
+            return None
+        true_vars = {var for var in self.solver.get_model() if var > 0}
+        self._solution = []
+        for var in true_vars:
+            self._solution.append(self.var_to_node[var])
         return self._solution
 
     def get_solution(self) -> list[NodeId]:
@@ -81,6 +105,7 @@ class KCentersSolver:
         The graph may not be complete, and edge weights are used to represent distances.
         """
         self.graph = graph
+        self.distances = Distances(self.graph)
         # TODO: Implement me!
 
     def solve_heur(self, k: int) -> list[NodeId]:
@@ -89,7 +114,20 @@ class KCentersSolver:
         Returns the k selected centers as a list of node IDs.
         """
         # TODO: Implement me!
-        centers = None
+        if k > len(list(self.distances.all_vertices())):
+            raise ValueError("k > |nodes|")
+        centers = [next(iter(self.distances.all_vertices()))]
+        for _ in range(1, k):
+            current_center = None
+            current_max = 0
+            for u in self.distances.all_vertices():
+                if u in centers:
+                    continue
+                min_dist = min(self.distances.dist(u, v) for v in centers)
+                if  min_dist > current_max:
+                    current_max = min_dist
+                    current_center = u
+            centers.append(current_center)
         return centers
 
 
@@ -99,8 +137,30 @@ class KCentersSolver:
         Returns the selected centers as a list of node IDs.
         """
         # Start with a heuristic solution
+        import bisect
+        sorted_distances = sorted(set(self.distances.sorted_distances()))
         centers = self.solve_heur(k)
         obj = self.distances.max_dist(centers)
+        upper = sorted_distances.index(obj)
+        decision_variant = KCenterDecisionVariant(self.distances, k)
+        last_index = math.inf
+        target = obj / 2
+        lower = bisect.bisect_left(sorted_distances, target) - 1
+        while True:
+            index = (upper + lower) // 2
+            if last_index < index:
+                decision_variant = KCenterDecisionVariant(self.distances, k)
+            obj = sorted_distances[index]
+            decision_variant.limit_distance(obj)
+            sol = decision_variant.solve()
+            if sol is None:
+                lower = index + 1
+            else:
+                best_sol = sol
+                upper = index - 1
+            if lower >= upper:
+                break
+            last_index = index
 
-        # TODO: Implement me!
-        return centers
+
+        return best_sol
