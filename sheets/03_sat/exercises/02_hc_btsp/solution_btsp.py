@@ -1,7 +1,10 @@
 import math
 from enum import Enum
+from os import remove
 
 import networkx as nx
+from networkx.classes import edges
+
 from _timer import Timer
 from solution_hamiltonian import HamiltonianCycleModel
 
@@ -36,9 +39,15 @@ class BottleneckTSPSolver:
         """
         self.graph = graph
         # TODO: Implement me!
+        self.sorted_lengths = sorted(self.graph.edges, key=lambda e: self.graph.edges[e]["weight"])
+
+
 
     def lower_bound(self) -> float:
         # TODO: Implement me!
+        return 0.0
+
+
 
     def optimize_bottleneck(
         self,
@@ -48,6 +57,21 @@ class BottleneckTSPSolver:
         """
         Find the optimal bottleneck tsp tour.
         """
-
         self.timer = Timer(time_limit)
-        # TODO: Implement me!
+        best_sol = None
+        lower = 0
+        upper = len(self.sorted_lengths) - 1
+        while True:
+            index = (upper + lower) // 2
+            graph_copy = self.graph.copy()
+            graph_copy.remove_edges_from(self.sorted_lengths[index + 1:])
+            model = HamiltonianCycleModel(graph_copy)
+            result = model.solve()
+            if result is not None:
+                best_sol = result
+                upper = index - 1
+                self.graph = graph_copy
+            else:
+                lower = index + 1
+            if upper <= lower:
+                return best_sol

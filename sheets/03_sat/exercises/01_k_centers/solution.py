@@ -61,7 +61,7 @@ class KCenterDecisionVariant:
         self.solver = SATSolver("Minicard")
         self.max_dist = math.inf
         self.solver.add_atmost([self.node_to_var[node] for node in self.distances.all_vertices()], self.k)
-        self._unsat = False
+        self.unsat = False
 
     def limit_distance(self, limit: float) -> None:
         """Adds constraints to the SAT solver to ensure coverage within the given distance."""
@@ -71,14 +71,14 @@ class KCenterDecisionVariant:
         for u in nodes:
             nodes_in_limit = self.distances.vertices_in_range(u, limit)
             if not nodes_in_limit:
-                self._unsat = True
+                self.unsat = True
                 return
             self.solver.add_clause([self.node_to_var[node] for node in nodes_in_limit])
 
 
     def solve(self) -> list[NodeId] | None:
         """Solves the SAT problem and returns the list of selected nodes, if feasible."""
-        if self._unsat:
+        if self.unsat:
             return None
         if not self.solver.solve():
             return None
@@ -137,7 +137,6 @@ class KCentersSolver:
         Returns the selected centers as a list of node IDs.
         """
         # Start with a heuristic solution
-        import bisect
         sorted_distances = sorted(set(self.distances.sorted_distances()))
         centers = self.solve_heur(k)
         obj = self.distances.max_dist(centers)
@@ -145,7 +144,12 @@ class KCentersSolver:
         decision_variant = KCenterDecisionVariant(self.distances, k)
         last_index = math.inf
         target = obj / 2
-        lower = bisect.bisect_left(sorted_distances, target) - 1
+        lower = 0
+        for i in range(len(sorted_distances)-1):
+            if sorted_distances[i + 1] > target:
+                break
+            lower = i
+        best_sol = None
         while True:
             index = (upper + lower) // 2
             if last_index < index:
