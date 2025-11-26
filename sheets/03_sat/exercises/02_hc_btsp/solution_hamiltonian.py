@@ -20,8 +20,7 @@ class HamiltonianCycleModel:
             var_edges = [self.edge_to_var[(u, v)] for v in self.graph.neighbors(u)]
             self.solver.add_atmost(var_edges, 2)
             self.solver.add_clause(var_edges)
-            for var in var_edges:
-                self.solver.add_clause([-var] + [v for v in var_edges if v != var])
+            self.solver.add_atmost([-edge for edge in var_edges], len(var_edges)-2)
 
 
 
