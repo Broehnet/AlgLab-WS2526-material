@@ -40,6 +40,7 @@ class Distances:
         """Returns an iterable of nodes within `limit` distance from node `u`."""
         return (v for v, d in self._distances[u].items() if d <= limit)
 
+
     def sorted_distances(self) -> list[float]:
         """Returns a sorted list of all pairwise distances in the graph."""
         return sorted(
@@ -137,34 +138,23 @@ class KCentersSolver:
         Returns the selected centers as a list of node IDs.
         """
         # Start with a heuristic solution
+        import bisect
         sorted_distances = sorted(set(self.distances.sorted_distances()))
         centers = self.solve_heur(k)
         obj = self.distances.max_dist(centers)
-        upper = sorted_distances.index(obj)
+        index = sorted_distances.index(obj)
         decision_variant = KCenterDecisionVariant(self.distances, k)
-        last_index = math.inf
-        target = obj / 2
-        lower = 0
-        for i in range(len(sorted_distances)-1):
-            if sorted_distances[i + 1] > target:
-                break
-            lower = i
         best_sol = None
         while True:
-            index = (upper + lower) // 2
-            if last_index < index:
-                decision_variant = KCenterDecisionVariant(self.distances, k)
-            obj = sorted_distances[index]
-            decision_variant.limit_distance(obj)
-            sol = decision_variant.solve()
-            if sol is None:
-                lower = index + 1
-            else:
-                best_sol = sol
-                upper = index - 1
-            if lower >= upper:
+            if index < 0:
                 break
-            last_index = index
-
+            new_bound = sorted_distances[index]
+            decision_variant.limit_distance(new_bound)
+            sol = decision_variant.solve()
+            if not sol:
+                break
+            best_sol = sol
+            radius = self.distances.max_dist(sol)
+            index = min(index-1, bisect.bisect_left(sorted_distances, radius))
 
         return best_sol
