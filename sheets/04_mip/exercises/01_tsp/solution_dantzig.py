@@ -42,7 +42,6 @@ class GurobiTspSolver:
         self._model.setObjective(sum(self.graph[u][v]["weight"]*x for (u, v), x in self.vars.items()), gp.GRB.MINIMIZE)
 
 
-
     def x(self, u, v):
         if (u, v) in self.vars:
             return self.vars[(u, v)]
@@ -101,7 +100,7 @@ class GurobiTspSolver:
                     outgoing = []
                     for u in comp:
                         outgoing += [self.x(u, v) for v in not_in_comp]
-                    model.cbLazy(gp.quicksum(outgoing) >= 2)
+                    model.cbLazy(gp.quicksum(outgoing) >= self.k)
 
         self._model.optimize(callback)
 

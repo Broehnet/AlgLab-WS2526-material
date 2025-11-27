@@ -36,12 +36,25 @@ class GurobiTspRelaxationSolver:
         logging.info("Implementing subtour elimination with >= %d", k)
         self._model = gp.Model()
         # TODO: Implement me!
+        self.vars = {(u, v): self._model.addVar(vtype=gp.GRB.CONTINUOUS, lb=0.0, ub=1.0, name=f"{u}_{v}") for u, v in self.graph.edges}
+        for u in self.graph.nodes:
+            self._model.addConstr(gp.quicksum(self.x(u, v) for v in self.graph.nodes if v != u) == 2)
+        self._model.setObjective(sum(self.graph[u][v]["weight"] * x for (u, v), x in self.vars.items()), gp.GRB.MINIMIZE)
+        self.solution = None
+
+
+    def x(self, u, v):
+        if (u, v) in self.vars:
+            return self.vars[(u, v)]
+        return self.vars[(v, u)]
+
 
     def get_lower_bound(self) -> float:
         """
         Return the current lower bound.
         """
         # TODO: Implement me!
+        return self._model.ObjBound
 
     def get_solution(self) -> typing.Optional[nx.Graph]:
         """
@@ -57,13 +70,14 @@ class GurobiTspRelaxationSolver:
         graph.add_edge(1, 2, x=1.0)
         ```
         """
-        # TODO: Implement me!
+        return self.solution
 
     def get_objective(self) -> typing.Optional[float]:
         """
         Return the objective value of the last solution.
         """
         # TODO: Implement me!
+        return sum(self.graph[u][v]["weight"]*x.X for (u, v), x in self.vars.items() if x.X >= 0.01)
 
     def solve(self) -> None:
         """
@@ -73,5 +87,23 @@ class GurobiTspRelaxationSolver:
         logging.info("Solving model ...")
         # Set parameters for the solver.
         self._model.Params.LogToConsole = 1
-
-        # TODO: Implement me!
+        while True:
+            self._model.optimize()
+            if self._model.status == gp.GRB.INFEASIBLE:
+                break
+            if self._model.status == gp.GRB.OPTIMAL:
+                G = nx.Graph()
+                for u, v in self.graph.edges:
+                    x = self.x(u, v)
+                    if x.X >= 0.01:
+                        G.add_edge(u, v, weight=self.graph[u][v]["weight"], x=x.X)
+                comps = list(nx.connected_components(G))
+                if len(comps) == 1:
+                    self.solution = G
+                    break
+                for comp in comps:
+                    not_in_comp = [u for u in self.graph if u not in comp]
+                    outgoing = []
+                    for u in comp:
+                        outgoing += [self.x(u, v) for v in not_in_comp]
+                    self._model.addConstr(gp.quicksum(outgoing) >= self.k)
