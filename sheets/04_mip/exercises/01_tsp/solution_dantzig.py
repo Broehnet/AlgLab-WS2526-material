@@ -38,8 +38,8 @@ class GurobiTspSolver:
         # TODO: Implement me!
         self.vars = {(u, v): self._model.addVar(vtype=gp.GRB.BINARY, name=f"{u}_{v}") for u, v in self.graph.edges}
         for u in self.graph.nodes:
-            self._model.addConstr(1.5 <= gp.quicksum(self.x(u, v) for v in self.graph.nodes if v != u)  <= 2.5)
-        self._model.setObjective(sum(edge["weight"]*x.X for edge, x in self.vars), gp.GRB.MINIMIZE)
+            self._model.addConstr(gp.quicksum(self.x(u, v) for v in self.graph.nodes if v != u) == 2)
+        self._model.setObjective(sum(self.graph[u][v]["weight"]*x for (u, v), x in self.vars.items()), gp.GRB.MINIMIZE)
 
 
 
@@ -59,18 +59,22 @@ class GurobiTspSolver:
         return self._model.ObjBound
 
 
-    def get_solution(self) -> typing.Optional[nx.Graph]:
+    def get_solution(self, in_callback = False) -> typing.Optional[nx.Graph]:
         """
         Return the current solution as a graph.
         """
         # TODO: Implement me!
-        return nx.Graph([uv for uv, x in self.vars if self._model.cbGetSolution(x) > 0.5])
+        if in_callback:
+            return nx.Graph([uv for uv, x in self.vars.items() if self._model.cbGetSolution(x) > 0.5])
+        else:
+            return nx.Graph([uv for uv, x in self.vars.items() if x.X > 0.5])
+
 
     def get_objective(self) -> typing.Optional[float]:
         """
         Return the objective value of the last solution.
         """
-        return sum(edge["weight"] for edge, x in self.vars if x.X > 0.5)
+        return sum(self.graph[u][v]["weight"] for (u, v), x in self.vars.items() if x.X > 0.5)
 
     def solve(self, time_limit: float, opt_tol: float = 0.001) -> None:
         """
@@ -88,7 +92,7 @@ class GurobiTspSolver:
 
         def callback(model, where):
             if where == gp.GRB.Callback.MIPSOL:
-                solution = self.get_solution()
+                solution = self.get_solution(in_callback=True)
                 comps = list(nx.connected_components(solution))
                 if len(comps) == 1:
                     return
@@ -97,7 +101,7 @@ class GurobiTspSolver:
                     outgoing = []
                     for u in comp:
                         outgoing += [self.x(u, v) for v in not_in_comp]
-                        self._model.cbLazy(gp.quicksum(outgoing) >= 2)
+                    model.cbLazy(gp.quicksum(outgoing) >= 2)
 
         self._model.optimize(callback)
 
