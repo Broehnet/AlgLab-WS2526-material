@@ -36,24 +36,41 @@ class GurobiTspSolver:
         logging.info("Implementing subtour elimination with >= %d", k)
         self._model = gp.Model()
         # TODO: Implement me!
+        self.vars = {(u, v): self._model.addVar(vtype=gp.GRB.BINARY, name=f"{u}_{v}") for u, v in self.graph.edges}
+        for u in self.graph.nodes:
+            self._model.addConstr(1.5 <= gp.quicksum(self.x(u, v) for v in self.graph.nodes if v != u)  <= 2.5)
+        self._model.setObjective(sum(edge["weight"]*x.X for edge, x in self.vars), gp.GRB.MINIMIZE)
+
+
+
+    def x(self, u, v):
+        if (u, v) in self.vars:
+            return self.vars[(u, v)]
+        return self.vars[(v, u)]
+
+
+
 
     def get_lower_bound(self) -> float:
         """
         Return the current lower bound.
         """
         # TODO: Implement me!
+        return self._model.ObjBound
+
 
     def get_solution(self) -> typing.Optional[nx.Graph]:
         """
         Return the current solution as a graph.
         """
         # TODO: Implement me!
+        return nx.Graph([uv for uv, x in self.vars if self._model.cbGetSolution(x) > 0.5])
 
     def get_objective(self) -> typing.Optional[float]:
         """
         Return the objective value of the last solution.
         """
-        # TODO: Implement me!
+        return sum(edge["weight"] for edge, x in self.vars if x.X > 0.5)
 
     def solve(self, time_limit: float, opt_tol: float = 0.001) -> None:
         """
@@ -69,5 +86,19 @@ class GurobiTspSolver:
             opt_tol  # https://www.gurobi.com/documentation/11.0/refman/mipgap.html
         )
 
-        # ...
-        # TODO: Implement me!
+        def callback(model, where):
+            if where == gp.GRB.Callback.MIPSOL:
+                solution = self.get_solution()
+                comps = list(nx.connected_components(solution))
+                if len(comps) == 1:
+                    return
+                for comp in comps:
+                    not_in_comp = [u for u in self.graph if u not in comp]
+                    outgoing = []
+                    for u in comp:
+                        outgoing += [self.x(u, v) for v in not_in_comp]
+                        self._model.cbLazy(gp.quicksum(outgoing) >= 2)
+
+        self._model.optimize(callback)
+
+
