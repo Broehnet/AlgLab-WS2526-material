@@ -17,7 +17,7 @@ def multi_start_greedy(graph: nx.Graph, rounds):
     for i in range(rounds):
         random.shuffle(nodelist)
         current = greedy(graph, nodelist.copy())
-        if smallest is None or current[1] < smallest[1]:
+        if smallest is None or current < smallest:
             smallest = current
     return smallest
 
@@ -32,7 +32,7 @@ def greedy(graph: nx.Graph, nodelist):
                 break
             k += 1
         coloring[node] = k
-    return coloring, max(coloring.values())
+    return max(coloring.values())
 
 
 def dsatur(graph: nx.Graph):
@@ -67,11 +67,13 @@ def dsatur(graph: nx.Graph):
             if n not in coloring:
                 sat[n].add(k)
 
-    return coloring, max(coloring.values())
+    return max(coloring.values())
 
+if __name__ == "__main__":
+    G = nx.erdos_renyi_graph(n=1000, p=.5)
+    # G = nx.barabasi_albert_graph(1000, 100)
+    # G = nx.newman_watts_strogatz_graph(1000, 100, 0.3)
 
-G = nx.erdos_renyi_graph(n=1000, p=.5)
-
-print(naive_greedy(G)[1])
-print(multi_start_greedy(G, 10)[1])
-print(dsatur(G)[1])
+    print(naive_greedy(G))
+    print(multi_start_greedy(G, 10))
+    print(dsatur(G))
