@@ -1,9 +1,12 @@
+import time
+
 import gurobipy as gp
 import networkx as nx
 from solution import Solution
 from status import Status
-from ortools.sat.python.cp_model import FEASIBLE, OPTIMAL, CpModel, CpSolver
+from ortools.sat.python.cp_model import FEASIBLE, OPTIMAL, CpModel, CpSolver, UNKNOWN
 from heuristics import *
+from threading import Timer as ThreadTimer
 from pysat.solvers import Solver as SATSolver
 import math
 
@@ -21,7 +24,7 @@ class ASSGurobi:
         self.graph = graph
         self.bound = None
         self.best = best + 1
-        if self.best == -1:
+        if not self.best:
             self.best = max(dict(self.graph.degree).values()) + 1
         self.x = {}
         self.nodes = list(self.graph.nodes)
@@ -92,7 +95,7 @@ class ASSCPSAT:
         self.graph = graph
         self.bound = None
         self.best = best + 1
-        if self.best == -1:
+        if not self.best:
             self.best = max(dict(self.graph.degree).values()) + 1
         self.x = {}
         self.nodes = list(self.graph.nodes)
@@ -162,7 +165,7 @@ class ASSSGurobi:
         self.graph = graph
         self.bound = None
         self.best = best + 1
-        if self.best == -1:
+        if not self.best:
             self.best = max(dict(self.graph.degree).values()) + 1
         self.x = {}
         self.nodes = list(self.graph.nodes)
@@ -238,7 +241,7 @@ class ASSSCPSAT:
         self.graph = graph
         self.bound = None
         self.best = best + 1
-        if self.best == -1:
+        if not self.best:
             self.best = max(dict(self.graph.degree).values()) + 1
         self.x = {}
         self.nodes = list(self.graph.nodes)
@@ -313,7 +316,7 @@ class REPGurobi:
         self.graph = graph
         self.bound = None
         self.best = best + 1
-        if self.best == -1:
+        if not self.best:
             self.best = max(dict(self.graph.degree).values()) + 1
         self.x = {}
         self.nodes = list(self.graph.nodes)
@@ -391,7 +394,7 @@ class REPCPSAT:
         self.graph = graph
         self.bound = None
         self.best = best + 1
-        if self.best == -1:
+        if not self.best:
             self.best = max(dict(self.graph.degree).values()) + 1
         self.x = {}
         self.nodes = list(self.graph.nodes)
@@ -472,7 +475,7 @@ class CPUnequal:
         self.graph = graph
         self.bound = None
         self.best = best + 1
-        if self.best == -1:
+        if not self.best:
             self.best = max(dict(self.graph.degree).values()) + 1
         self.nodes = list(self.graph.nodes)
         self.z = {node: self.model.new_int_var(1, best, f"z_{node}") for node in self.nodes}
@@ -532,7 +535,7 @@ class AllDifferent:
         self.graph = graph
         self.bound = None
         self.best = best + 1
-        if self.best == -1:
+        if not self.best:
             self.best = max(dict(self.graph.degree).values()) + 1
         self.nodes = list(self.graph.nodes)
         self.z = {node: self.model.new_int_var(1, best, f"z_{node}") for node in self.nodes}
@@ -588,3 +591,111 @@ class AllDifferent:
 
         return Solution(coloring=self.coloring, num_colors=self.upper_bound, lower_bound=self.lower_bound,
                         status=self.status)
+
+class PYSATDecisionVariant:
+
+    def __init__(self, graph: nx.Graph, k, timelimit: float = math.inf):
+        self.status = None
+        self.solver = SATSolver("Minicard")
+        self.timeout = False
+        def interrupt(_):
+            self.solver.interrupt()
+            self.timeout = True
+        self.timelimit_provided = False
+        if timelimit is not None:
+            if timelimit < math.inf:
+                self.timer = ThreadTimer(timelimit, interrupt, [None])
+                self.timer.start()
+                self.timelimit_provided = True
+        self.k = k
+        self.graph = graph
+        self.nodes = list(self.graph.nodes)
+        self.var = {}
+        self.var_count = 1
+        self.coloring = {}
+        for node in self.nodes:
+            clause = []
+            for i in range(1, k+1):
+                self.var[(node, i)] = self.var_count
+                clause.append(self.var_count)
+                self.var_count += 1
+            self.solver.add_clause(clause)
+        self.node_color = {var: node_color for node_color, var in self.var.items()}
+
+        for u, v in self.graph.edges:
+            for i in range(1, k+1):
+                self.solver.add_clause([-self.var[(u, i)], -self.var[(v, i)]])
+
+
+    def solve(self):
+        self.status = self.solver.solve_limited(expect_interrupt=self.timelimit_provided)
+        if not self.status:
+            return None, self.status
+        true_vars = {var for var in self.solver.get_model() if var > 0}
+        for var in true_vars:
+            node, color = self.node_color[var]
+            self.coloring[node] = color
+        return self.coloring, self.status
+
+
+class PYSATSolver:
+
+    def __init__(self, graph: nx.Graph, best: int = -1):
+        self.status = None
+        self.graph = graph
+        self.best = best
+        if self.best == -1:
+            self.best = max(dict(self.graph.degree).values()) + 1
+        self.best_sol = None
+
+
+    def solve(self, timelimit: float = math.inf):
+        timing = False
+        start = None
+        if timelimit < math.inf:
+            start = time.time()
+            timing = True
+        k = self.best
+        status = None
+        timeout = False
+        while True:
+            remaining = None
+            if timing:
+                runtime = time.time() - start
+                if runtime > timelimit:
+                    timeout = True
+                    break
+                remaining = timelimit - runtime
+            decision_variant = PYSATDecisionVariant(self.graph, k, remaining)
+            sol, status = decision_variant.solve()
+            if decision_variant.timeout:
+                timeout = True
+            if not status:
+                break
+            self.best_sol = sol
+            self.best = k
+            k -= 1
+            if not k:
+                break
+
+        if self.best_sol is None:
+            if timeout:
+                self.status = Status.UNKNOWN
+            else:
+                self.status = Status.INFEASIBLE
+        else:
+            if timeout:
+                self.status = Status.FEASIBLE
+            else:
+                self.status = Status.OPTIMAL
+
+        return Solution(coloring=self.best_sol, num_colors=self.best, lower_bound=None,
+                        status=self.status)
+
+
+
+
+
+
+
+
