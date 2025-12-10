@@ -16,6 +16,54 @@ def test_correctness(graph: nx.Graph, coloring):
             return False
     return True
 
+
+def test_chromatic_number_exact(chromatic_number, solution):
+    return chromatic_number == solution
+
+
+def generate_test_set():
+    return [
+        ("C5", nx.cycle_graph(5), 3),
+        ("W6", nx.wheel_graph(6), 4),
+        ("Petersen", nx.petersen_graph(), 3),
+        ("Mycielski5", nx.mycielski_graph(5), 5),
+        ("Chvatal", nx.chvatal_graph(), 4),
+    ]
+
+
+def test():
+    solvers = [ASSGurobi, ASSCPSAT, ASSSGurobi, ASSSCPSAT, REPGurobi, REPCPSAT, CPUnequal, AllDifferent, PYSATSolver]
+    test_set = generate_test_set()
+    all_true = True
+    results = []
+    for solver in solvers:
+        results.append("=" * 30)
+        results.append(solver.__name__)
+        results.append("=" * 30)
+        for test in test_set:
+            name = test[0]
+            graph = test[1]
+            chromatic_number = test[2]
+            best = dsatur(graph)
+            s = solver(graph, best)
+            sol = s.solve()
+            num_colors = sol.num_colors
+            coloring = sol.coloring
+            result = test_chromatic_number_exact(chromatic_number, num_colors) and test_correctness(graph, coloring)
+            results.append(f"{name}: {result} {num_colors} {chromatic_number}")
+            if not result:
+                all_true = False
+
+    return all_true, results
+
+
+def run_tests():
+    test_result = test()
+    for s in test_result[1]:
+        print(s)
+    print(test_result[0])
+
+
 def generate_benchmark_set(seed=42):
     graphs = []
     parameters = [6, 9]
@@ -41,7 +89,7 @@ def generate_benchmark_set(seed=42):
     return graphs
 
 
-def run_tests(graph, Solver, best, Gn, preprocessor, timelimit=60):
+def solve_instance(graph, Solver, best, Gn, preprocessor, timelimit=60):
     G = graph[1]
     sol = None
     if Gn is None or not Gn.number_of_nodes():
@@ -53,6 +101,7 @@ def run_tests(graph, Solver, best, Gn, preprocessor, timelimit=60):
         sol = preprocessor.postprocess(sol)
     result = (graph[0], sol)
     return result
+
 
 def run_evaluation_solvers(path):
     solvers = [ASSGurobi, ASSCPSAT, ASSSGurobi, ASSSCPSAT, REPGurobi, REPCPSAT, CPUnequal, AllDifferent, PYSATSolver]
@@ -69,7 +118,7 @@ def run_evaluation_solvers(path):
                                 "lower_bound": -math.inf})
                 continue
             print(solver.__name__, " ", graph[0])
-            result = run_tests(graph, solver, best, Gn, preprocessor, timelimit)
+            result = solve_instance(graph, solver, best, Gn, preprocessor, timelimit)
             name = result[0]
             sol = result[1]
             results.append({"test_graph": name, "solver": solver.__name__, "num_colors": sol.num_colors,
@@ -93,7 +142,7 @@ def run_evaluation_solvers_and_preprocessing(path):
                                 "lower_bound": -math.inf})
                 continue
             print(solver.__name__, " ", graph[0])
-            result = run_tests(graph, solver, best, Gn, preprocessor, timelimit)
+            result = solve_instance(graph, solver, best, Gn, preprocessor, timelimit)
             name = result[0]
             sol = result[1]
             results.append({"test_graph": name, "solver": f"{solver.__name__}_preprocessed", "num_colors": sol.num_colors,
@@ -108,7 +157,7 @@ def run_evaluation_solvers_and_preprocessing(path):
                                 "lower_bound": -math.inf})
                 continue
             print(solver.__name__, " ", graph[0])
-            result = run_tests(graph, solver, best, Gn, preprocessor, timelimit)
+            result = solve_instance(graph, solver, best, Gn, preprocessor, timelimit)
             name = result[0]
             sol = result[1]
             results.append({"test_graph": name, "solver": solver.__name__, "num_colors": sol.num_colors,

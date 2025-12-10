@@ -330,7 +330,7 @@ class REPGurobi:
         for u in self.nodes:
             self.model.addConstr(gp.quicksum(self.x[u, v] for v in self.nodes if v not in self.neighbors[u]) == 1)
 
-        self.model.addConstr(gp.quicksum(self.x[u, u] for u in self.nodes) <= best)
+        self.model.addConstr(gp.quicksum(self.x[u, u] for u in self.nodes) <= self.best)
 
         for w in self.nodes:
             excluded = self.neighbors[w] + [w]
@@ -405,7 +405,7 @@ class REPCPSAT:
                     continue
                 self.x[(u, v)] = self.model.new_bool_var(f"x_{u}_{v}")
 
-        self.model.add(sum(self.x[u, u] for u in self.nodes) <= best)
+        self.model.add(sum(self.x[u, u] for u in self.nodes) <= self.best)
 
         for u in self.nodes:
             self.model.add(sum(self.x[u, v] for v in self.nodes if v not in self.neighbors[u]) == 1)
@@ -441,7 +441,7 @@ class REPCPSAT:
                 for v in self.nodes:
                     if u == v or u in self.neighbors[v]:
                         continue
-                    if self.solver.Value(self.x[(u, u)]):
+                    if self.solver.Value(self.x[(v, u)]):
                         self.coloring[v] = self.coloring[u]
             self.num_colors = counter - 1
             self.upper_bound = self.num_colors
