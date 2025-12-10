@@ -127,6 +127,30 @@ def run_evaluation_solvers(path):
     df.to_csv(path, index=False)
 
 
+def run_evaluation_preprocessing(path):
+    solvers = [ASSGurobi, ASSCPSAT, ASSSGurobi, ASSSCPSAT, REPGurobi, REPCPSAT, CPUnequal, AllDifferent, PYSATSolver]
+    test_set = generate_benchmark_set()
+    timelimit = 60
+    results = []
+    for graph in test_set:
+        best = dsatur(graph[1])
+        preprocessor = DegreeBasedPreprocessor(graph[1].copy())
+        Gn = preprocessor.preprocess()
+        for solver in solvers:
+            if graph[0] == "kneser_15_4" and (solver == REPGurobi or solver == REPCPSAT):
+                results.append({"test_graph": graph[0], "solver": f"{solver.__name__}_preprocessed", "num_colors": math.inf,
+                                "lower_bound": -math.inf})
+                continue
+            print(solver.__name__, " ", graph[0])
+            result = solve_instance(graph, solver, best, Gn, preprocessor, timelimit)
+            name = result[0]
+            sol = result[1]
+            results.append({"test_graph": name, "solver": f"{solver.__name__}_preprocessed", "num_colors": sol.num_colors,
+                            "lower_bound": sol.lower_bound})
+    df = pd.DataFrame(results)
+    df.to_csv(path, index=False)
+
+
 def run_evaluation_solvers_and_preprocessing(path):
     solvers = [ASSGurobi, ASSCPSAT, ASSSGurobi, ASSSCPSAT, REPGurobi, REPCPSAT, CPUnequal, AllDifferent, PYSATSolver]
     test_set = generate_benchmark_set()
@@ -187,6 +211,8 @@ def run_evaluation_heuristics(path):
 
 def main():
     csv_path_solvers = "evaluation_solvers.csv"
+    run_evaluation_solvers(csv_path_solvers)
+    csv_path_solvers = "evaluation_preprocessing.csv"
     run_evaluation_solvers(csv_path_solvers)
     csv_path_solvers_and_preprocessing = "evaluation_solvers_and_preprocessing.csv"
     run_evaluation_solvers(csv_path_solvers_and_preprocessing)

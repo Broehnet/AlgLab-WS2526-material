@@ -244,6 +244,18 @@ def plot_solvers():
     fig.savefig("evaluation_solvers_solution.png", dpi=300)
 
 
+def plot_preprocessing():
+    csv_file = "evaluation_preprocessing.csv"
+    ax = plot_color_lowerbound_profile(
+        csv_file
+    )
+    fig = ax.figure
+    fig.savefig("evaluation_preprocessing_lower_bound.png", dpi=300)
+    ax = plot_color_solution_profile(csv_file)
+    fig = ax.figure
+    fig.savefig("evaluation_preprocessing_solution.png", dpi=300)
+
+
 def plot_solvers_and_preprocessing():
     csv_file = "evaluation_solvers_and_preprocessing.csv"
     ax = plot_color_lowerbound_profile(
@@ -265,6 +277,7 @@ def plot_heuristics():
 
 def main():
     plot_solvers()
+    plot_preprocessing()
     plot_solvers_and_preprocessing()
     plot_heuristics()
 
